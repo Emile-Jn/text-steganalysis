@@ -4,7 +4,7 @@
 
 #### The detailed implementation of previous methods can be found [Here!](https://github.com/CAU-Tstega/Text-steganalysis) ,including LS_CNN, TS-BiRNN, R-BiLSTM-C, BiLSTM-Dense, MS-TL.
 
-#### <span style="color:red">HiDuNet</span> is published on IEEE/ACM Transactions on Audio, Speech, and Language Processing (2023.11) [(paper link)](https://ieeexplore.ieee.org/abstract/document/10268497)
+#### HiDuNet is published on IEEE/ACM Transactions on Audio, Speech, and Language Processing (2023.11) [(paper link)](https://ieeexplore.ieee.org/abstract/document/10268497)
 #### SDCNet is published on  Chinese Journal of Electronics (2023.06) [(paper link)](https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=10038789)
 
 ### ------Few-shot and Cross Domain scenarios------
@@ -13,6 +13,8 @@
 #### ARTS is published on EUROPEAN CONFERENCE ON ARTIFICIAL INTELLIGENCE (24'ECAI) [(paper link)](https://openreview.net/forum?id=TYqfRoOdJn)
 #### LS-FAT is published on IEEE Transactions on Depetable and Secure Computing (2025.01) [(paper link）](https://ieeexplore.ieee.org/abstract/document/10849805)
 #### TTALS is published on IEEE Signal Processing Letters (2024.07) [(paper link）](https://ieeexplore.ieee.org/abstract/document/10582504)
+#### SALT-LS is published on CIKM (2025.08)
+
 
 ## Data Link (Google 云盘）
 #### https://drive.google.com/drive/folders/1c8_1jKihhHLsfSgh8nSZDy3eGOHfSt6w?usp=sharing
