@@ -13,7 +13,7 @@
 #### ARTS is published on EUROPEAN CONFERENCE ON ARTIFICIAL INTELLIGENCE (24'ECAI) [(paper link)](https://openreview.net/forum?id=TYqfRoOdJn)
 #### LS-FAT is published on IEEE Transactions on Depetable and Secure Computing (2025.01) [(paper link）](https://ieeexplore.ieee.org/abstract/document/10849805)
 #### TTALS is published on IEEE Signal Processing Letters (2024.07) [(paper link）](https://ieeexplore.ieee.org/abstract/document/10582504)
-#### SALT-LS is published on CIKM (2025.08)
+#### SALT-LS is published on ACM International Conference on Information and Knowledge Management (CIKM) (2025.08)
 
 
 ## Data Link (Google 云盘）
