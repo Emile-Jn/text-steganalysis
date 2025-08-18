@@ -4,7 +4,7 @@
 
 #### The detailed implementation of previous methods can be found [Here!](https://github.com/CAU-Tstega/Text-steganalysis) ,including LS_CNN, TS-BiRNN, R-BiLSTM-C, BiLSTM-Dense, MS-TL.
 
-#### HiDuNet is published on IEEE/ACM Transactions on Audio, Speech, and Language Processing (2023.11) [(paper link)](https://ieeexplore.ieee.org/abstract/document/10268497)
+#### <span style="color:red">HiDuNet</span> is published on IEEE/ACM Transactions on Audio, Speech, and Language Processing (2023.11) [(paper link)](https://ieeexplore.ieee.org/abstract/document/10268497)
 #### SDCNet is published on  Chinese Journal of Electronics (2023.06) [(paper link)](https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=10038789)
 
 ### ------Few-shot and Cross Domain scenarios------
