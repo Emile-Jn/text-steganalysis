@@ -15,7 +15,11 @@ for lm in ${LanguageModel[*]}
                 do
                     export DATA_DIR=/data/Text_data/HSFN/${lm}/${cor}/${al}/${bpw}/
                     export OUTPUT_DIR=./outputs/${lm}/${cor}_${al}_${bpw}/
-    
+    # Parameters:
+    # num_hidden_layers change 12 to 2 for test
+    # num_output_layers change 5 to 2 for test
+    # train_batch_size change 64 to 8 for test
+    # eval_batch_size change 64 to 8 for test
                     python ./Hierarchical_Bert.py \
                       --model_name_or_path bert-base-uncased \
                       --do_train \
@@ -25,11 +29,11 @@ for lm in ${LanguageModel[*]}
                       --data_dir $DATA_DIR \
                       --log_dir ./LogFiles/ \
                       --output_dir $OUTPUT_DIR \
-                      --num_hidden_layers 12 \
-                      --num_output_layers 5 \
+                      --num_hidden_layers 2 \
+                      --num_output_layers 2 \
                       --max_seq_length 128 \
-                      --train_batch_size 64 \
-                      --eval_batch_size 64 \
+                      --train_batch_size 8 \
+                      --eval_batch_size 8 \
                       --learning_rate 5e-5 \
                       --weight_decay 0.1 \
                       --save_steps 50 \

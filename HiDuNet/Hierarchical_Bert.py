@@ -11,6 +11,7 @@ from arguments import get_args
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, RandomSampler
+from torch.optim import AdamW
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 import fitlog
@@ -18,7 +19,7 @@ import fitlog
 import transformers
 from transformers import WEIGHTS_NAME
 from transformers import BertTokenizer as ElasticBertTokenizer
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup
 from transformers.trainer_utils import is_main_process
 
 from models.configuration_elasticbert import ElasticBertConfig
