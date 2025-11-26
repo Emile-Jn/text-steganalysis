@@ -13,6 +13,7 @@ for lm in ${LanguageModel[*]}
             do
             for bpw in ${Payload[*]}
                 do
+                    # make data directories like /data/Text_data/HSFN/LSTM/Twitter/HC/2bpw/
                     export DATA_DIR=/data/Text_data/HSFN/${lm}/${cor}/${al}/${bpw}/
                     export OUTPUT_DIR=./outputs/${lm}/${cor}_${al}_${bpw}/
     # Parameters:

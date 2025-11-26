@@ -16,31 +16,31 @@
 """PyTorch ElasticBERT model for Early Exit with Entropy. """
 
 import math
-import sys
 
 import torch
 import torch.utils.checkpoint
 from torch import nn
 from torch.nn import LayerNorm
-from torch.nn import CrossEntropyLoss, MSELoss
-from torch.nn.functional import softplus
+from torch.nn import CrossEntropyLoss
+import torch.nn.functional as F
 from torch.distributions import Normal, Independent
 
 from transformers.activations import ACT2FN
-from transformers.modeling_utils import (
-    PreTrainedModel,
-    apply_chunking_to_forward,
-    find_pruneable_heads_and_indices,
-    prune_linear_layer,
-)
-from transformers.file_utils import (
+from transformers import PreTrainedModel
+import transformers.pytorch_utils as pytorch_utils
+
+# assign helpers from the submodule (avoids some static-analysis resolution issues)
+apply_chunking_to_forward = pytorch_utils.apply_chunking_to_forward
+find_pruneable_heads_and_indices = pytorch_utils.find_pruneable_heads_and_indices
+prune_linear_layer = pytorch_utils.prune_linear_layer
+# Note: docstring helper functions moved in newer transformers versions
+from transformers.utils.doc import (
     add_code_sample_docstrings,
     add_start_docstrings,
-    add_start_docstrings_to_model_forward,   
+    add_start_docstrings_to_model_forward,
 )
 from transformers.utils import logging
 from .configuration_elasticbert import ElasticBertConfig
-from torch.nn.functional import softplus
 
 
 logger = logging.get_logger(__name__)
@@ -66,13 +66,11 @@ class GradientRescaleFunction(torch.autograd.Function):
         return output
     
     @staticmethod
-    def backward(ctx, grad_outputs):
-        input = ctx.saved_tensors
+    def backward(ctx, *grad_outputs):
+        # grad_outputs comes as a tuple of gradients for each output
         grad_input = grad_weight = None
-
         if ctx.needs_input_grad[0]:
-            grad_input = ctx.gd_scale_weight * grad_outputs
-
+            grad_input = ctx.gd_scale_weight * grad_outputs[0]
         return grad_input, grad_weight
 
 gradient_rescale = GradientRescaleFunction.apply
@@ -158,11 +156,10 @@ class ElasticBertSelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
         if config.hidden_size % config.num_attention_heads != 0 \
-            and not hasattr(config, "embedding_size"):
+             and not hasattr(config, "embedding_size"):
             raise ValueError(
-                f"The hidden size ({config.hidden_size}) is not a multiple"\
-                "of the number of attention "
-                f"heads ({config.num_attention_heads})"
+                f"The hidden size ({config.hidden_size}) is not a multiple of "
+                f"the number of attention heads ({config.num_attention_heads})"
             )
 
         self.num_attention_heads = config.num_attention_heads
@@ -489,8 +486,7 @@ class ElasticBertEncoder(nn.Module):
 
             if i == self.num_hidden_layers - 1:
                 if self.add_pooling_layer:
-                    final_pooled_output = \
-                        self.pooler[11](hidden_states)
+                    final_pooled_output = self.pooler[i](hidden_states)
                 else:
                     final_pooled_output = hidden_states[:, 0]
 
@@ -658,7 +654,6 @@ class ElasticBertModel(ElasticBertPreTrainedModel):
         ELASTICBERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
     )
     @add_code_sample_docstrings(
-        tokenizer_class=_TOKENIZER_FOR_DOC,
         checkpoint=_CHECKPOINT_FOR_DOC,
         config_class=_CONFIG_FOR_DOC,        
     )
@@ -675,17 +670,11 @@ class ElasticBertModel(ElasticBertPreTrainedModel):
         output_hidden_states=None,
     ):
 
-        output_attentions = output_attentions if output_attentions is not None \
-            else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None \
-            else self.config.output_hidden_states
-        )
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
 
         if input_ids is not None and inputs_embeds is not None:
-            raise ValueError("You cannot specify both input_ids and "\
-                "inputs_embeds at the same time"
-            )
+            raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
             input_shape = input_ids.size()
             batch_size, seq_length = input_shape
@@ -741,7 +730,9 @@ class ElasticBertModel(ElasticBertPreTrainedModel):
             mid_fea.append(pooled_output)
             if i<self.num_output_layers and self.add_pooling_layer:
                 assert pooled_output is not None
-                logits = output_layers[i](output_dropout(pooled_output))
+                # output_layers/output_dropout may be None when using the base model
+                out = output_dropout(pooled_output) if output_dropout is not None else pooled_output
+                logits = output_layers[i](out) if (output_layers is not None) else None
 
             encoder_outputs = gradient_rescale(
                 encoder_outputs, 
@@ -765,7 +756,7 @@ class ElasticBertModel(ElasticBertPreTrainedModel):
 
 # VAE encoder 
 class VAE_Encoder(nn.Module):
-    def __init__(self, args, z_dim=128):
+    def __init__(self, args, z_dim: int = 128):
         super(VAE_Encoder, self).__init__()
         self.z_dim = z_dim
         self.linear = nn.Linear(z_dim, 1)
@@ -779,7 +770,7 @@ class VAE_Encoder(nn.Module):
         x = self.linear(x.permute(0, 2, 1))
         params = self.net(x.squeeze(2))
         mu, sigma = params[:, :self.z_dim], params[:, self.z_dim:]
-        sigma = softplus(sigma) + 1e-7
+        sigma = F.softplus(sigma) + 1e-7
         return Independent(Normal(loc=mu, scale=sigma), 1)
 
 
@@ -798,7 +789,7 @@ class S_Net(nn.Module):
 
 # intra attention
 class IntraAttention(nn.Module):
-    def __init__(self, d_model):
+    def __init__(self, d_model: int):
         super(IntraAttention, self).__init__()
         self.d_model = d_model
         self.query = nn.Linear(self.d_model, self.d_model)
@@ -827,10 +818,9 @@ class IntraAttention(nn.Module):
 
 
 
-
 # Adaptive Feature Fusion Network
 class FusionNet(nn.Module):
-    def __init__(self, shared_dim=128):
+    def __init__(self, shared_dim: int = 128):
         super(FusionNet, self).__init__()
         self.Sen_aligner = nn.Sequential(
             nn.Linear(768, shared_dim),
@@ -864,7 +854,7 @@ class FusionNet(nn.Module):
 
 
 class ElasticBertForSequenceClassification(ElasticBertPreTrainedModel):
-    def __init__(self, config, args, add_pooling_layer=True):
+    def __init__(self, config, args, add_pooling_layer: bool = True):
         super().__init__(config)
         self.config = config
         self.num_labels = config.num_labels
@@ -888,7 +878,6 @@ class ElasticBertForSequenceClassification(ElasticBertPreTrainedModel):
         ELASTICBERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
     )
     @add_code_sample_docstrings(
-        tokenizer_class=_TOKENIZER_FOR_DOC,
         checkpoint=_CHECKPOINT_FOR_DOC,
         config_class=_CONFIG_FOR_DOC,
     )  
@@ -944,5 +933,4 @@ class ElasticBertForSequenceClassification(ElasticBertPreTrainedModel):
 
         total_loss = (H_total_loss + loss) / 2 
 
-        return (total_loss, logits)               
-
+        return (total_loss, logits)

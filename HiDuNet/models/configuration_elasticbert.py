@@ -16,8 +16,10 @@
 """ ElasticBERT model configuration """
 
 
-from transformers.utils import logging
-from transformers.configuration_utils import PretrainedConfig
+from typing import Any
+
+# Use the public top-level imports from transformers in recent versions
+from transformers import PretrainedConfig, logging
 
 
 logger = logging.get_logger(__name__)
@@ -36,29 +38,31 @@ class ElasticBertConfig(PretrainedConfig):
     """
 
     model_type = "elasticbert"
+    architectures = ["ElasticBertModel"]
 
     def __init__(
         self,
-        vocab_size=30522,
-        hidden_size=768,
-        num_hidden_layers=12,
-        num_attention_heads=12,
-        max_output_layers=12,
-        num_output_layers=12,
-        intermediate_size=3072,
-        hidden_act="gelu",
-        hidden_dropout_prob=0.1,
-        attention_probs_dropout_prob=0.1,
-        max_position_embeddings=512,
-        type_vocab_size=2,
-        initializer_range=0.02,
-        layer_norm_eps=1e-12,
-        pad_token_id=0,
-        gradient_checkpointing=False,
-        position_embedding_type="absolute",
-        use_cache=True,
-        **kwargs
-    ):
+        vocab_size: int = 30522,
+        hidden_size: int = 768,
+        num_hidden_layers: int = 12,
+        num_attention_heads: int = 12,
+        max_output_layers: int = 12,
+        num_output_layers: int = 12,
+        intermediate_size: int = 3072,
+        hidden_act: str = "gelu",
+        hidden_dropout_prob: float = 0.1,
+        attention_probs_dropout_prob: float = 0.1,
+        max_position_embeddings: int = 512,
+        type_vocab_size: int = 2,
+        initializer_range: float = 0.02,
+        layer_norm_eps: float = 1e-12,
+        pad_token_id: int = 0,
+        gradient_checkpointing: bool = False,
+        position_embedding_type: str = "absolute",
+        use_cache: bool = True,
+        **kwargs: Any,
+    ) -> None:
+        # Call the base class constructor to handle common fields (e.g., `return_dict`, `torch_dtype`, etc.)
         super().__init__(pad_token_id=pad_token_id, **kwargs)
 
         self.vocab_size = vocab_size
@@ -77,4 +81,5 @@ class ElasticBertConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.gradient_checkpointing = gradient_checkpointing
         self.position_embedding_type = position_embedding_type
+        # `use_cache` is a standard config field in recent transformers versions; keep it on the config
         self.use_cache = use_cache
