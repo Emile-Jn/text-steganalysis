@@ -1,0 +1,13 @@
+[project]
+name = "text-steganalysis"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.9"
+dependencies = [
+    "fitlog>=0.9.15",
+    "numpy>=2.0.2",
+    "scikit-learn>=1.6.1",
+    "torch>=2.8.0",
+    "tqdm>=4.67.1",
+    "transformers>=4.57.1",
+]
