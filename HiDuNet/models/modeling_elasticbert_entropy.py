@@ -853,6 +853,7 @@ class FusionNet(nn.Module):
         return logits
 
 
+## This is supposed to be the HiDuNet model
 class ElasticBertForSequenceClassification(ElasticBertPreTrainedModel):
     def __init__(self, config, args, add_pooling_layer: bool = True):
         super().__init__(config)

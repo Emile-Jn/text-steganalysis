@@ -14,7 +14,6 @@ from torch.optim import AdamW
 from tqdm import tqdm, trange
 import fitlog
 
-import transformers
 from transformers import logging as transformers_logging
 from transformers import BertTokenizer as ElasticBertTokenizer
 from transformers import get_linear_schedule_with_warmup
@@ -331,6 +330,86 @@ def train(args, train_dataset, model, tokenizer):
     return global_step, tr_loss / global_step, best
 
 
+def run_inference(args=None):
+    """Run inference on the test set using the model specified by args.model_name_or_path.
+
+    This function mirrors the inference part of main() but does not perform training
+    or any saving — it only loads the model/tokenizer from `model_name_or_path`, runs
+    evaluation on the 'test' split, logs results, appends them to ./test_results.txt,
+    and returns the results dict.
+    """
+    if args is None:
+        args = get_args()
+
+    # Setup device
+    args.device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
+
+    # Setup logging (don't change global logging config if already set)
+    logging.basicConfig(format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s", datefmt="%m/%d/%Y %H:%M:%S", level=logging.INFO)
+
+    # Set the verbosity to info of the Transformers logger (on main process only):
+    if is_main_process(-1):
+        transformers_logging.set_verbosity_info()
+        transformers_logging.enable_default_handler()
+        transformers_logging.enable_explicit_format()
+
+    # Set seed for reproducibility
+    set_seed(args)
+
+    # Prepare processor to get label info
+    processor = TStega_processor()
+    label_list = processor.get_labels()
+    num_labels = len(label_list)
+
+    # Load pretrained config and tokenizer from model_name_or_path
+    config = ElasticBertConfig.from_pretrained(
+        args.model_name_or_path,
+        num_labels=num_labels,
+        num_hidden_layers=args.num_hidden_layers,
+        num_output_layers=args.num_output_layers,
+        cache_dir=None,
+    )
+
+    tokenizer = ElasticBertTokenizer.from_pretrained(
+        args.model_name_or_path,
+        do_lower_case=True,
+        cache_dir=None,
+    )
+
+    args.embed_num = tokenizer.vocab_size
+
+    # Load model directly from model_name_or_path (no 'best_model' indirection)
+    model = ElasticBertForSequenceClassification.from_pretrained(
+        args.model_name_or_path,
+        config=config,
+        args=args,
+        add_pooling_layer=True,
+    )
+
+    model.to(args.device)
+
+    logger.info("Running inference using model at: %s", args.model_name_or_path)
+
+    # Evaluate on test set
+    results = evaluate(args, model, tokenizer, 'test')
+
+    # Log and persist results to a small test_results.txt file for easy review
+    test_result_file = os.path.join("./test_results.txt")
+    try:
+        with open(test_result_file, 'a', encoding='utf-8') as fout:
+            fout.write(args.model_name_or_path + '\n')
+            for key, value in results.items():
+                fout.write(f"{key}\t{value}\n")
+    except Exception:
+        # Best-effort: don't raise on logging failures, but still log
+        logger.warning("Unable to write test results to %s", test_result_file)
+
+    # Also print / info-log the results
+    logger.info("Test results for %s: %s", args.model_name_or_path, results)
+
+    return results
+
+
 def main():
     args = get_args()
 
@@ -433,4 +512,5 @@ def main():
 
 
 if __name__ == "__main__":
-    best = main()
+    # best = main()
+    results = run_inference()
