@@ -122,23 +122,41 @@ class ElasticBertEmbeddings(nn.Module):
         position_ids=None, 
         inputs_embeds=None,
     ):
+        # Choose canonical device as the device of the module's embedding
+        # weights. This avoids cases where the model is on GPU/MPS but the
+        # input tensors are on CPU (or vice-versa). We'll move inputs to the
+        # module device as needed.
+        device = self.word_embeddings.weight.device
+
+        # Move input tensors to the canonical device if they are provided.
         if input_ids is not None:
+            input_ids = input_ids.to(device)
             input_shape = input_ids.size()
-        else:
+        elif inputs_embeds is not None:
+            inputs_embeds = inputs_embeds.to(device)
             input_shape = inputs_embeds.size()[:-1]
+        else:
+            raise ValueError("You must specify either input_ids or inputs_embeds")
 
         seq_length = input_shape[1]
 
+        # Ensure provided position_ids / token_type_ids are on the chosen device
         if position_ids is None:
+            # Slice the registered buffer (already on module device) and use it
             position_ids = self.position_ids[:, :seq_length]
+        else:
+            position_ids = position_ids.to(device)
 
         if token_type_ids is None:
             token_type_ids = torch.zeros(
                 input_shape, 
                 dtype=torch.long, 
-                device=self.position_ids.device,
+                device=device,
             )
+        else:
+            token_type_ids = token_type_ids.to(device)
 
+        # If inputs_embeds not provided, build them from input_ids.
         if inputs_embeds is None:
             inputs_embeds = self.word_embeddings(input_ids)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
@@ -673,12 +691,20 @@ class ElasticBertModel(ElasticBertPreTrainedModel):
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
 
+        # Use the embedding module's device as the canonical device for the
+        # model to avoid device mismatches (CPU / CUDA / MPS).
+        device = self.embeddings.word_embeddings.weight.device
+
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
-        elif input_ids is not None:
+
+        # Move inputs to the canonical device and compute input shape
+        if input_ids is not None:
+            input_ids = input_ids.to(device)
             input_shape = input_ids.size()
             batch_size, seq_length = input_shape
         elif inputs_embeds is not None:
+            inputs_embeds = inputs_embeds.to(device)
             input_shape = inputs_embeds.size()[:-1]
             batch_size, seq_length = input_shape
         else:
@@ -686,28 +712,37 @@ class ElasticBertModel(ElasticBertPreTrainedModel):
                 "You have to specify either input_ids or inputs_embeds"
             )
 
-        device = input_ids.device if input_ids is not None else \
-            inputs_embeds.device
-
-
+        # Prepare masks and token type ids on the canonical device
         if attention_mask is None:
             attention_mask = torch.ones(
-                ((batch_size, seq_length)), 
+                (batch_size, seq_length),
                 device=device,
             )
+        else:
+            attention_mask = attention_mask.to(device)
+
         if token_type_ids is None:
             token_type_ids = torch.zeros(
-                input_shape, 
-                dtype=torch.long, 
+                input_shape,
+                dtype=torch.long,
                 device=device,
             )
+        else:
+            token_type_ids = token_type_ids.to(device)
 
-        # We can provide a self-attention mask of dimensions 
-        # [batch_size, from_seq_length, to_seq_length]
-        # ourselves in which case we just need to make it broadcastable 
-        # to all heads.
-        extended_attention_mask: torch.Tensor = \
-            self.get_extended_attention_mask(attention_mask, input_shape, device)
+        # Ensure position_ids (if provided) are on the canonical device when
+        # passed to embeddings; embeddings.forward will also handle movement,
+        # but we make sure any provided tensors are on the same device here.
+        if position_ids is not None:
+            position_ids = position_ids.to(device)
+
+        # Create the extended attention mask on the canonical device so it is
+        # compatible with attention computations in encoder layers.
+        extended_attention_mask: torch.Tensor = self.get_extended_attention_mask(
+            attention_mask if attention_mask is not None else None,
+            input_shape,
+            device,
+        )
 
         embedding_output = self.embeddings(
             input_ids=input_ids,
@@ -716,7 +751,6 @@ class ElasticBertModel(ElasticBertPreTrainedModel):
             inputs_embeds=inputs_embeds,
         )
 
-    
         encoder_outputs = embedding_output
         res = []
         mid_fea = []
@@ -894,6 +928,23 @@ class ElasticBertForSequenceClassification(ElasticBertPreTrainedModel):
         output_hidden_states=None,
     ):
     
+        # Use the bert embeddings weights device as the canonical device
+        # and move inputs/labels there to avoid device mismatches.
+        device = self.bert.embeddings.word_embeddings.weight.device
+
+        if input_ids is not None:
+            input_ids = input_ids.to(device)
+        if inputs_embeds is not None:
+            inputs_embeds = inputs_embeds.to(device)
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(device)
+        if token_type_ids is not None:
+            token_type_ids = token_type_ids.to(device)
+        if position_ids is not None:
+            position_ids = position_ids.to(device)
+        if labels is not None:
+            labels = labels.to(device)
+
         H_logits, H_features, embedding = self.bert(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -906,32 +957,35 @@ class ElasticBertForSequenceClassification(ElasticBertPreTrainedModel):
             output_hidden_states=output_hidden_states,
         )
         H_total_loss = None
-        for i in range(len(self.classifiers)):
-            H_loss_fct = CrossEntropyLoss()
-            H_loss = H_loss_fct(
-                H_logits[i].view(-1, self.num_labels), 
-                labels.view(-1),
-            )
-            if H_total_loss is None:
-                H_total_loss = H_loss
-            else:
-                H_total_loss += H_loss
+        if labels is not None:
+            for i in range(len(self.classifiers)):
+                H_loss_fct = CrossEntropyLoss()
+                H_loss = H_loss_fct(
+                    H_logits[i].view(-1, self.num_labels),
+                    labels.view(-1),
+                )
+                if H_total_loss is None:
+                    H_total_loss = H_loss
+                else:
+                    H_total_loss += H_loss
 
-        H_total_loss = H_total_loss / (len(self.classifiers))
+            H_total_loss = H_total_loss / (len(self.classifiers))
 
         Sat_features = self.s_net(inputs=embedding)
 
         Sen_features = H_features[-1]
 
         logits = self.fusion_net(Sen_features, Sat_features)
-        total_loss = None
-        loss = None
-        loss_fct = CrossEntropyLoss()
-        loss = loss_fct(
-            logits.view(-1, self.num_labels), 
-            labels.view(-1),
-        )
 
-        total_loss = (H_total_loss + loss) / 2 
+        if labels is not None:
+            loss_fct = CrossEntropyLoss()
+            loss = loss_fct(
+                logits.view(-1, self.num_labels),
+                labels.view(-1),
+            )
 
-        return (total_loss, logits)
+            total_loss = (H_total_loss + loss) / 2
+
+            return (total_loss, logits)
+
+        return (logits,)
